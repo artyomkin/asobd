@@ -1,4 +1,5 @@
 import random
+import time
 import uuid
 import socket
 import struct
@@ -17,6 +18,7 @@ class Click:
                  user_agent,
                  payload):
         self.type = type
+        self.created_at = time.time()
         self.session_id = session_id
         self.ip = ip
         self.user = user
@@ -298,12 +300,14 @@ def clicks_to_csv(clicks_batch, filename):
         writer = csv.writer(f, delimiter=',')
         for batch in clicks_batch:
             for c in batch:
+                #writer.writerow([
+                #    c.type, c.session_id, c.created_at, c.ip, c.user.fio, c.user.country, c.url, c.referrer,
+                #    c.device_type, c.user_agent, c.payload.event_title,
+                #    c.payload.element_id, c.payload.x, c.payload.y
+                #])
                 writer.writerow([
-                    c.type, c.session_id, c.ip, c.user.fio, c.user.country, c.url, c.referrer,
-                    c.device_type, c.user_agent, c.payload.event_title,
-                    c.payload.element_id, c.payload.x, c.payload.y
+                    c.type, c.session_id
                 ])
 
-
-
-clicks_to_csv(gen_entity(20000, gen_click_series), 'test.csv')
+clicks_to_csv(gen_entity(20, gen_click_series), 'test2.csv')
+#TODO http sender and broker sender

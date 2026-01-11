@@ -6,7 +6,7 @@ import struct
 import csv
 
 
-class Click:
+class Event:
     def __init__(self,
                  type,
                  session_id,
@@ -29,9 +29,8 @@ class Click:
         self.payload = payload
 
     def print(self):
-        """Вывод информации о клике на экран"""
         print("=" * 50)
-        print("CLICK INFORMATION")
+        print("EVENT INFORMATION")
         print("=" * 50)
         print(f"Type: {self.type}")
         print(f"Session ID: {self.session_id}")
@@ -46,13 +45,9 @@ class Click:
         if hasattr(self.payload, 'print'):
             self.payload.print()
         else:
-            print(f"  Event: {self.payload.event_title}")
-            print(f"  Element: {self.payload.element_id}")
-            print(f"  Coordinates: ({self.payload.x}, {self.payload.y})")
-        print("=" * 50)
+            print("no print method")
 
-
-class Payload:
+class ClickPayload:
     def __init__(self,
                  event_title,
                  element_id,
@@ -64,7 +59,6 @@ class Payload:
         self.y = y
 
     def print(self):
-        """Вывод информации о payload на экран"""
         print("  Event Title: {}".format(self.event_title))
         print("  Element ID: {}".format(self.element_id))
         print("  Coordinates: x={}, y={}".format(self.x, self.y))
@@ -78,7 +72,6 @@ class User:
         self.country = country
 
     def print(self):
-        """Вывод информации о пользователе на экран"""
         print("=" * 30)
         print("USER INFORMATION")
         print("=" * 30)
@@ -136,9 +129,6 @@ elements = [
         "y-max": 1020
     }
 ]
-
-# type - view или click
-type_values = ['view', 'click']
 
 # url - 10 рандомных URL
 url_values = [
@@ -232,7 +222,7 @@ cis_countries = [
     "Узбекистан"
 ]
 
-def gen_payload():
+def gen_click_payload():
     NON_TARGET_CLICK_PROB = 0.1
 
     payload = None
@@ -246,7 +236,7 @@ def gen_payload():
                 event = elem["event"]
                 element_name = elem["name"]
 
-        payload = Payload(event,
+        payload = ClickPayload(event,
                           element_name,
                           x,
                           y)
@@ -255,7 +245,7 @@ def gen_payload():
         x = random.randint(element["x-min"], element["x-max"])
         y = random.randint(element["y-min"], element["y-max"])
 
-        payload = Payload(element["event"],
+        payload = ClickPayload(element["event"],
                           element["name"],
                           x,
                           y)
@@ -269,28 +259,35 @@ def gen_user():
     country = random.choice(cis_countries)
     return User(fio, country)
 
-def gen_click_series():
-    type = random.choice(type_values)
-    session_id = uuid.uuid4()
-    ip = socket.inet_ntoa(struct.pack('>I', random.randint(1, 0xffffffff)))
-    user = gen_user()
-    url = random.choice(url_values)
-    referrer = random.choice(referrer_values)
-    device_type = random.choice(device_type_values)
-    user_agent = random.choice(user_agent_values)
+def gen_event_series():
+    num_events = random.randint(1,10)
 
-    payloads = [gen_payload() for i in range(random.randint(1, 10))]
-    click_series = [Click(type,
-                          session_id,
-                          ip,
-                          user,
-                          url,
-                          referrer,
-                          device_type,
-                          user_agent,
-                          payload) for payload in payloads]
+    events = []
+    for i in range(num_events):
+        session_id = uuid.uuid4()
+        ip = socket.inet_ntoa(struct.pack('>I', random.randint(1, 0xffffffff)))
+        user = gen_user()
+        url = random.choice(url_values)
+        referrer = random.choice(referrer_values)
+        device_type = random.choice(device_type_values)
+        user_agent = random.choice(user_agent_values)
 
-    return click_series
+        type = 'view'
+        event = Event(type,
+                session_id,
+                ip,
+                user,
+                url,
+                referrer,
+                device_type,
+                user_agent,
+                None)
+        if random.random() <= 0.02:
+            event.type = 'click'
+            event.payload = gen_click_payload()
+
+        events.append(event)
+    return events
 
 def gen_entity(num_entities, gen_func):
     return [gen_func() for i in range(num_entities)]
@@ -298,16 +295,37 @@ def gen_entity(num_entities, gen_func):
 def clicks_to_csv(clicks_batch, filename):
     with open(filename, mode='w') as f:
         writer = csv.writer(f, delimiter=',')
+        writer.writerow([
+            'type',
+            'session_id',
+            'created_at',
+            'ip',
+            'fio',
+            'country',
+            'url',
+            'referrer',
+            'device_type',
+            'user_agent',
+            'event_title',
+            'element_id',
+            'x',
+            'y'
+        ])
         for batch in clicks_batch:
             for c in batch:
-                #writer.writerow([
-                #    c.type, c.session_id, c.created_at, c.ip, c.user.fio, c.user.country, c.url, c.referrer,
-                #    c.device_type, c.user_agent, c.payload.event_title,
-                #    c.payload.element_id, c.payload.x, c.payload.y
-                #])
-                writer.writerow([
-                    c.type, c.session_id
-                ])
+                if c.type == "click":
+                    writer.writerow([
+                        c.type, c.session_id, c.created_at, c.ip, c.user.fio, c.user.country, c.url, c.referrer,
+                        c.device_type, c.user_agent, c.payload.event_title,
+                        c.payload.element_id, c.payload.x, c.payload.y
+                    ])
+                if c.type == "view":
+                    writer.writerow([
+                        c.type, c.session_id, c.created_at, c.ip, c.user.fio, c.user.country, c.url, c.referrer,
+                        c.device_type, c.user_agent, "-", "-", "-", '-'
+                    ])
 
-clicks_to_csv(gen_entity(20, gen_click_series), 'test2.csv')
+
+clicks_to_csv(gen_entity(200000, gen_event_series), 'test.csv')
+
 #TODO http sender and broker sender

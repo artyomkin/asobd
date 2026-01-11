@@ -1,25 +1,33 @@
-from airflow import DAG
-from datetime import datetime
+import time
+import uuid
+
 import pandas as pd
-from airflow.sdk import task
 from clickhouse_driver import Client
 from prefect import task, flow
+import asyncio
 
 @task
 def read_csv():
-    return pd.read_csv('/home/artyom/PycharmProjects/asobd/test2.csv', header=None)
+    return pd.read_csv('/home/artyom/PycharmProjects/asobd/test.csv')
 
 @task
 def transform_data(df):
-    df['transformed'] = df[df.columns[0]] + '-transformed'
-    df = df.rename(columns={0: "event_type", 1: "session_id"})
+    df['received_at'] = time.time()
+    df['event_id'] = df.apply(lambda x: str(uuid.uuid4()), axis=1)
     return df
 
+def insert_events(client, df):
+    client.execute('INSERT INTO events (event_id, event_type, created_at, received_at, session_id, url, referrer) VALUES',
+                   df[['event_id', 'type', 'created_at', 'received_at', 'session_id', 'url', 'referrer']].to_dict('records'))
+    client.execute('INSERT INTO clicks (event_id, event_title, element_id, x, y) VALUES',
+                   df[df['type' == 'click']][['event_id', 'event_title', 'element_id', 'x', 'y']].to_dict('records'))
+
+#TODO: insert sessions
 
 @task
 def load_to_clickhouse(df):
     client = Client(host='localhost', port=9000, user='myuser', password='mypassword')
-    client.execute('INSERT INTO mart VALUES', df.to_dict('records'))
+    insert_events(client, df)
 
 @flow
 def pipeline():
@@ -27,6 +35,6 @@ def pipeline():
     transformed = transform_data(df)
     print(df.head())
     load_to_clickhouse(transformed)
-
+    
 if __name__ == "__main__":
-    pipeline()
+    pipeline.serve()

@@ -9,6 +9,7 @@ import csv
 class Event:
     def __init__(self,
                  type,
+                 created_at,
                  session_id,
                  ip,
                  user,
@@ -18,7 +19,7 @@ class Event:
                  user_agent,
                  payload):
         self.type = type
-        self.created_at = time.time()
+        self.created_at = created_at
         self.session_id = session_id
         self.ip = ip
         self.user = user
@@ -47,12 +48,14 @@ class Event:
         else:
             print("no print method")
 
-class ClickPayload:
+class Payload:
     def __init__(self,
+                 payload_type,
                  event_title,
                  element_id,
                  x,
                  y):
+        self.payload_type = payload_type
         self.event_title = event_title
         self.element_id = element_id
         self.x = x
@@ -66,8 +69,10 @@ class ClickPayload:
 
 class User:
     def __init__(self,
+                 id,
                  fio,
                  country):
+        self.id = id
         self.fio = fio
         self.country = country
 
@@ -75,6 +80,7 @@ class User:
         print("=" * 30)
         print("USER INFORMATION")
         print("=" * 30)
+        print(f"ID: {self.id}")
         print(f"Name: {self.fio}")
         print(f"Country: {self.country}")
         print("=" * 30)
@@ -222,71 +228,86 @@ cis_countries = [
     "Узбекистан"
 ]
 
+
+def gen_occasional_click_payload():
+    x = random.randint(0, 1920)
+    y = random.randint(0, 1080)
+    event = "occasional_click"
+    element_name = "body"
+    for elem in elements:
+        if x >= elem["x-min"] and x <= elem["x-max"] and y >= elem["y-min"] and y <= elem["y-max"]:
+            event = elem["event"]
+            element_name = elem["name"]
+    return Payload('click', event, element_name, x, y)
+
 def gen_click_payload():
+    element = random.choice(elements)
+    x = random.randint(element["x-min"], element["x-max"])
+    y = random.randint(element["y-min"], element["y-max"])
+    return Payload('click', element["event"], element["name"], x, y)
+
+def gen_view_payload():
+    element = random.choice(elements)
+    return Payload('view', element["event"], element["name"], 0, 0)
+
+def gen_payload():
+    CLICK_PROB = 0.02
     NON_TARGET_CLICK_PROB = 0.1
 
     payload = None
-    if (random.random() <= NON_TARGET_CLICK_PROB):
-        x = random.randint(0, 1920)
-        y = random.randint(0, 1080)
-        event = "occasional_click"
-        element_name = "body"
-        for elem in elements:
-            if x >= elem["x-min"] and x <= elem["x-max"] and y >= elem["y-min"] and y <= elem["y-max"]:
-                event = elem["event"]
-                element_name = elem["name"]
-
-        payload = ClickPayload(event,
-                          element_name,
-                          x,
-                          y)
+    if random.random() <= CLICK_PROB:
+        if random.random() <= NON_TARGET_CLICK_PROB:
+            payload = gen_occasional_click_payload()
+        else:
+            payload = gen_click_payload()
     else:
-        element = random.choice(elements)
-        x = random.randint(element["x-min"], element["x-max"])
-        y = random.randint(element["y-min"], element["y-max"])
+        payload = gen_view_payload()
 
-        payload = ClickPayload(element["event"],
-                          element["name"],
-                          x,
-                          y)
     return payload
 
 def gen_user():
+    id = uuid.uuid4()
     name = random.choice(names)
     surname = random.choice(surnames)
     patronymic = random.choice(patronymics)
     fio = " ".join([surname, name, patronymic])
     country = random.choice(cis_countries)
-    return User(fio, country)
+    return User(id, fio, country)
 
 def gen_event_series():
-    num_events = random.randint(1,10)
+    num_sessions = random.randint(1, 3)
+    num_events = random.randint(1,3)
 
     events = []
-    for i in range(num_events):
+    user = gen_user()
+
+    for j in range(num_sessions):
         session_id = uuid.uuid4()
         ip = socket.inet_ntoa(struct.pack('>I', random.randint(1, 0xffffffff)))
-        user = gen_user()
-        url = random.choice(url_values)
-        referrer = random.choice(referrer_values)
         device_type = random.choice(device_type_values)
         user_agent = random.choice(user_agent_values)
+        for i in range(num_events):
+            url = random.choice(url_values)
+            referrer = random.choice(referrer_values)
 
-        type = 'view'
-        event = Event(type,
-                session_id,
-                ip,
-                user,
-                url,
-                referrer,
-                device_type,
-                user_agent,
-                None)
-        if random.random() <= 0.02:
-            event.type = 'click'
-            event.payload = gen_click_payload()
+            now = time.time()
+            half_year_ago = now - 30 * 24 * 3600 * 6
+            created_at = int(random.uniform(half_year_ago, now))
+            payload = gen_payload()
+            event_type = payload.payload_type
 
-        events.append(event)
+            event = Event(event_type,
+                    created_at,
+                    session_id,
+                    ip,
+                    user,
+                    url,
+                    referrer,
+                    device_type,
+                    user_agent,
+                    payload)
+
+            events.append(event)
     return events
 
 def gen_entity(num_entities, gen_func):
@@ -296,10 +317,11 @@ def clicks_to_csv(clicks_batch, filename):
     with open(filename, mode='w') as f:
         writer = csv.writer(f, delimiter=',')
         writer.writerow([
-            'type',
+            'event_type',
             'session_id',
             'created_at',
             'ip',
+            'user_id',
             'fio',
             'country',
             'url',
@@ -313,17 +335,11 @@ def clicks_to_csv(clicks_batch, filename):
         ])
         for batch in clicks_batch:
             for c in batch:
-                if c.type == "click":
-                    writer.writerow([
-                        c.type, c.session_id, c.created_at, c.ip, c.user.fio, c.user.country, c.url, c.referrer,
-                        c.device_type, c.user_agent, c.payload.event_title,
-                        c.payload.element_id, c.payload.x, c.payload.y
-                    ])
-                if c.type == "view":
-                    writer.writerow([
-                        c.type, c.session_id, c.created_at, c.ip, c.user.fio, c.user.country, c.url, c.referrer,
-                        c.device_type, c.user_agent, "-", "-", "-", '-'
-                    ])
+                writer.writerow([
+                    c.type, c.session_id, c.created_at, c.ip, c.user.id, c.user.fio, c.user.country, c.url, c.referrer,
+                    c.device_type, c.user_agent, c.payload.event_title,
+                    c.payload.element_id, c.payload.x, c.payload.y
+                ])
 
 
 clicks_to_csv(gen_entity(200000, gen_event_series), 'test.csv')

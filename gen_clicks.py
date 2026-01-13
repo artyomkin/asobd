@@ -138,16 +138,16 @@ elements = [
 
 # url - 10 рандомных URL
 url_values = [
-    'https://shop.com/products/smartphone',
-    'https://news.site/articles/tech-news',
-    'https://social.net/profile/user123',
-    'https://video.host/watch/abc123',
-    'https://forum.site/topic/python-help',
-    'https://blog.dev/how-to-code',
-    'https://store.app/games/best-sellers',
-    'https://travel.agency/tours/europe',
-    'https://learning.edu/courses/data-science',
-    'https://finance.bank/accounts/overview'
+    'https://asobd.com/products/smartphone',
+    'https://asobd.com/articles/tech-news',
+    'https://asobd.com/profile/user123',
+    'https://asobd.com/watch/abc123',
+    'https://asobd.com/topic/python-help',
+    'https://asobd.com/how-to-code',
+    'https://asobd.com/games/best-sellers',
+    'https://asobd.com/tours/europe',
+    'https://asobd.com/courses/data-science',
+    'https://asobd.com/accounts/overview'
 ]
 
 # referrer - 10 рандомных рефереров
@@ -165,7 +165,7 @@ referrer_values = [
 ]
 
 # device_type - 3 рандомных типа устройств
-device_type_values = ['desktop', 'mobile', 'tablet']
+device_type_values = ['desktop', 'mobile', 'tablet', 'TV', 'microwave oven', 'credit card', 'calculator']
 
 # user_agent - 5 рандомных User-Agent строк
 user_agent_values = [
@@ -274,6 +274,18 @@ def gen_user():
     country = random.choice(cis_countries)
     return User(id, fio, country)
 
+def gen_session_interval():
+    now = time.time()
+    half_year_ago = now - 30 * 24 * 3600 * 6
+    session_duration_min = 0
+    session_duration_max = 60 * 60
+
+    session_start = random.uniform(half_year_ago, now)
+    session_duration = random.uniform(session_duration_min, session_duration_max)
+    session_end = random.uniform(session_start, session_start + session_duration)
+    return session_start, session_end
+
+
 def gen_event_series():
     num_sessions = random.randint(1, 3)
     num_events = random.randint(1,3)
@@ -286,13 +298,13 @@ def gen_event_series():
         ip = socket.inet_ntoa(struct.pack('>I', random.randint(1, 0xffffffff)))
         device_type = random.choice(device_type_values)
         user_agent = random.choice(user_agent_values)
+        session_start, session_end = gen_session_interval()
+
         for i in range(num_events):
             url = random.choice(url_values)
             referrer = random.choice(referrer_values)
 
-            now = time.time()
-            half_year_ago = now - 30 * 24 * 3600 * 6
-            created_at = int(random.uniform(half_year_ago, now))
+            created_at = int(random.uniform(session_start, session_end))
             payload = gen_payload()
             event_type = payload.payload_type
 

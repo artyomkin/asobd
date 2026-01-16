@@ -1,0 +1,6 @@
+TRUNCATE TABLE IF EXISTS events;
+TRUNCATE TABLE IF EXISTS sessions;
+TRUNCATE TABLE IF EXISTS ctr_element_mart;
+TRUNCATE TABLE IF EXISTS ctr_mart;
+TRUNCATE TABLE IF EXISTS session_duration_mart;
+TRUNCATE TABLE IF EXISTS user_activity_mart;

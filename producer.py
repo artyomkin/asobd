@@ -453,7 +453,7 @@ def clicks_to_kafka(clicks):
 #clicks_to_json(gen_entity(3, gen_event_series), 'test.json')
 
 for i in range(100):
-    clicks_to_kafka(gen_events(100))
+    clicks_to_kafka(gen_events(20))
     time.sleep(5)
 
 #TODO http sender and broker sender

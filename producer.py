@@ -1,9 +1,12 @@
+import json
 import random
 import time
 import uuid
 import socket
 import struct
 import csv
+from kafka import KafkaProducer
+import json
 
 
 class Event:
@@ -48,6 +51,20 @@ class Event:
         else:
             print("no print method")
 
+    def to_dict(self):
+        return {
+            "event_type": self.type,
+            "created_at": self.created_at,
+            "session_id": str(self.session_id),
+            "ip": self.ip,
+            "user": self.user.to_dict(),
+            "url": self.url,
+            "referrer": self.referrer,
+            "device_type": self.device_type,
+            "user_agent": self.user_agent,
+            "payload": self.payload.to_dict()
+        }
+
 class Payload:
     def __init__(self,
                  payload_type,
@@ -65,6 +82,14 @@ class Payload:
         print("  Event Title: {}".format(self.event_title))
         print("  Element ID: {}".format(self.element_id))
         print("  Coordinates: x={}, y={}".format(self.x, self.y))
+
+    def to_dict(self):
+        return {
+            "event_title": self.event_title,
+            "element_id": self.element_id,
+            "x": self.x,
+            "y": self.y
+        }
 
 
 class User:
@@ -84,6 +109,13 @@ class User:
         print(f"Name: {self.fio}")
         print(f"Country: {self.country}")
         print("=" * 30)
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "fio": self.fio,
+            "country": self.country
+        }
 
 elements = [
     {
@@ -320,10 +352,55 @@ def gen_event_series():
                     payload)
 
             events.append(event)
+            events = add_errors(events)
     return events
+
+def add_random_null(event):
+    required_event_props = ['created_at', 'session_id', 'url', 'device_type']
+    required_user_props = ['id']
+    required_payload_props = ['event_title', 'element_id']
+
+    rand = random.random()
+    if rand <= 0.33:
+        random_property = random.choice(required_event_props)
+        setattr(event, random_property, None)
+    elif rand <= 0.66:
+        random_property = random.choice(required_user_props)
+        setattr(event.user, random_property, None)
+    else:
+        random_property = random.choice(required_payload_props)
+        setattr(event.payload, random_property, None)
+    return event
+
+
+def add_errors(events):
+    DUPLICATE_PROB = 0.05
+    NULL_PROB = 0.03
+
+    ind = 0
+    while ind < len(events):
+
+        if random.random() <= DUPLICATE_PROB:
+            events.insert(ind, events[ind])
+            ind += 2
+            continue
+
+        if random.random() <= NULL_PROB:
+            events[ind] = add_random_null(events[ind])
+
+        ind += 1
+    return events
+
 
 def gen_entity(num_entities, gen_func):
     return [gen_func() for i in range(num_entities)]
+
+def gen_events(num_entities):
+    res = []
+    for i in range(num_entities):
+        res.extend(gen_event_series())
+
+    return res
 
 def clicks_to_csv(clicks_batch, filename):
     with open(filename, mode='w') as f:
@@ -353,7 +430,30 @@ def clicks_to_csv(clicks_batch, filename):
                     c.payload.element_id, c.payload.x, c.payload.y
                 ])
 
+def clicks_to_json(clicks_batch, filename):
+    with open(filename, mode='w') as f:
+        clicks = []
+        for b in clicks_batch:
+            clicks.extend(b)
 
-clicks_to_csv(gen_entity(200000, gen_event_series), 'test.csv')
+        c = [click.to_dict() for click in clicks]
+        json.dump(c, f)
+
+def clicks_to_kafka(clicks):
+    producer = KafkaProducer(
+        bootstrap_servers='localhost:9092',
+        value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+    )
+    print(len(clicks))
+    for c in clicks:
+        producer.send('events-topic', c.to_dict())
+    producer.flush()
+
+#clicks_to_csv(gen_entity(200000, gen_event_series), 'test.csv')
+#clicks_to_json(gen_entity(3, gen_event_series), 'test.json')
+
+for i in range(100):
+    clicks_to_kafka(gen_events(100))
+    time.sleep(5)
 
 #TODO http sender and broker sender

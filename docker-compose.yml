@@ -1,0 +1,27 @@
+services:
+  etl:
+    build: .
+    volumes:
+      - ./etl.py:/etl.py
+    entrypoint: ['python3', '/etl.py']
+
+  consumer:
+    build: .
+    volumes:
+      - ./consumer.py:/consumer.py
+    entrypoint: ['python3', '/consumer.py']
+
+  server:
+    build: .
+    volumes:
+      - ./server.py:/server.py
+    entrypoint: ['python3', '/server.py']
+
+  prefect:
+    image: prefecthq/prefect:2-latest
+    command: prefect server start
+    ports:
+      - "4200:4200"
+
+volumes:
+  postgres_data:

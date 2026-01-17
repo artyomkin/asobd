@@ -51,6 +51,10 @@ docker compose up -d
 ### Диаграмма таблиц
 ![dbdiagram](pics/dbdiagram.png)
 
+### Графики в Grafana
+![grafana1](pics/grafana1.png)
+![grafana2](pics/grafana2.png)
+
 ### REST API
 POST - /events
 Пример body
